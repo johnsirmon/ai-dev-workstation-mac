@@ -1,0 +1,213 @@
+#!/bin/bash
+# Weekly automated update script for AI Agent Development Workstation
+# This script orchestrates the complete update process
+
+set -e
+
+echo "AI Agent Development Workstation - Weekly Update"
+echo "Started: $(date)"
+
+# Create necessary directories
+mkdir -p reports logs
+
+# Set up logging
+LOG_FILE="logs/update-$(date +%Y-%m-%d).log"
+exec 1> >(tee -a "$LOG_FILE")
+exec 2> >(tee -a "$LOG_FILE" >&2)
+
+# Function to check if Python packages are installed
+check_python_deps() {
+    echo "Checking Python dependencies..."
+    
+    # Check for Homebrew (macOS)
+    if ! command -v brew &> /dev/null; then
+        echo "WARNING: Homebrew not found. Install Homebrew first:"
+        echo "/bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+    fi
+    
+    # Check for Python 3
+    if ! command -v python3 &> /dev/null; then
+        echo "WARNING: Python 3 not found. Install via Homebrew:"
+        echo "brew install python@3.11"
+    fi
+    
+    if ! python3 -c "import requests, packaging, bs4" 2>/dev/null; then
+        echo "Installing required Python packages..."
+        if [ -f "requirements.txt" ]; then
+            pip3 install -r requirements.txt
+        else
+            pip3 install requests packaging beautifulsoup4
+        fi
+    fi
+    
+    echo "Python dependencies ready"
+}
+
+# Function to run tool version checks
+run_tool_checks() {
+    echo ""
+    echo "Running tool version checks..."
+    echo "================================="
+    
+    if [ -f "scripts/update-tools.py" ]; then
+        python3 scripts/update-tools.py
+        echo "Tool version check completed"
+    else
+        echo "ERROR: Tool version checker not found"
+        exit 1
+    fi
+}
+
+# Function to run forum monitoring
+run_forum_monitoring() {
+    echo ""
+    echo "Running forum monitoring..."
+    echo "=============================="
+    
+    if [ -f "scripts/forum-monitor.py" ]; then
+        python3 scripts/forum-monitor.py
+        echo "Forum monitoring completed"
+    else
+        echo "ERROR: Forum monitor not found"
+        exit 1
+    fi
+}
+
+# Function to update MCP server configurations
+update_mcp_configs() {
+    echo ""
+    echo "Updating MCP server configurations..."
+    echo "======================================="
+    
+    # Check if MCP servers are up to date
+    if command -v npx &> /dev/null; then
+        echo "Checking MCP server versions..."
+        
+        # Update context7 if available
+        if npx --yes @upstash/context7-mcp --version &> /dev/null; then
+            echo "Context7 MCP server is available"
+        else
+            echo "WARNING: Context7 MCP server not accessible - check configuration"
+        fi
+        
+        # Update other MCP servers
+        echo "MCP server check completed"
+    else
+        echo "WARNING: npm/npx not found - MCP servers may not be available"
+    fi
+}
+
+# Function to generate weekly summary
+generate_summary() {
+    echo ""
+    echo "Generating weekly summary..."
+    echo "=============================="
+    
+    SUMMARY_FILE="reports/weekly-summary-$(date +%Y-%m-%d).md"
+    
+    cat > "$SUMMARY_FILE" << EOF
+# Weekly AI Agent Development Update
+*Generated: $(date)*
+
+## Summary
+This weekly update includes:
+- Tool version checks and updates
+- Community forum monitoring
+- MCP server configuration updates
+- Trending tool analysis
+
+## Files Updated
+- \`config/tools-tracking.json\` - Tool version tracking
+- \`README.md\` - Updated with latest versions and trending tools
+- \`reports/community-insights-$(date +%Y-%m-%d).md\` - Community insights
+
+## Next Steps
+1. Review the community insights report for emerging trends
+2. Evaluate any new trending tools for potential inclusion
+3. Test any updated tool versions in development environment
+4. Consider updating development workflow based on new findings
+
+## Automation Status
+- **Automated**: Tool version checking
+- **Automated**: Forum monitoring
+- **Automated**: README updates
+- **Manual**: Tool evaluation and integration decisions
+
+---
+*This update was generated automatically by the AI Agent Development Workstation update system.*
+EOF
+
+    echo "Weekly summary generated: $SUMMARY_FILE"
+}
+
+# Function to commit changes if any
+commit_changes() {
+    echo ""
+    echo "Checking for changes to commit..."
+    echo "==================================="
+    
+    if git diff --quiet && git diff --cached --quiet; then
+        echo "No changes to commit"
+    else
+        echo "Changes detected, creating commit..."
+        
+        # Add all tracked files that have been modified
+        git add -u
+        
+        # Add new reports
+        git add reports/ 2>/dev/null || true
+        
+        # Add updated config
+        git add config/tools-tracking.json 2>/dev/null || true
+        
+        # Commit with automated message
+        git commit -m "Weekly automated update - $(date +%Y-%m-%d)
+
+- Updated tool versions and tracking
+- Added community insights report
+- Refreshed trending tools analysis
+
+Generated by AI Agent Development Workstation automation"
+        
+        echo "Changes committed successfully"
+    fi
+}
+
+# Main execution
+main() {
+    echo "Starting automated update process..."
+    
+    # Check dependencies
+    check_python_deps
+    
+    # Run tool checks
+    run_tool_checks
+    
+    # Run forum monitoring
+    run_forum_monitoring
+    
+    # Update MCP configurations
+    update_mcp_configs
+    
+    # Generate summary
+    generate_summary
+    
+    # Commit changes
+    commit_changes
+    
+    echo ""
+    echo "Weekly update completed successfully!"
+    echo "======================================"
+    echo "Completed: $(date)"
+    echo "Log file: $LOG_FILE"
+    echo ""
+    echo "Next actions to consider:"
+    echo "1. Review the generated reports in the reports/ directory"
+    echo "2. Check for any new trending tools that might be worth investigating"
+    echo "3. Test any updated tool versions in your development environment"
+    echo "4. Consider updating your development workflow based on community insights"
+    echo ""
+}
+
+# Run main function
+main
